@@ -2,7 +2,7 @@ CFLAGS := -Wall -Werror
 
 all: nordump
 
-nordump: ParallelFLASHDumper_rpi.o
+nordump: nordump.o
 	$(CC) -o $@ $< -lwiringPi -lpthread
 
 clean:
