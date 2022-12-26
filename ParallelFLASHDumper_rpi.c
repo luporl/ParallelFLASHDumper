@@ -1,177 +1,167 @@
 /*
  * Original version written by Gina Hortenbach.
  *
- * This code is intended to run on the Raspberry Pi with the WiringPi Library.
+ * This code is intended to run a Raspberry Pi 3 Model B,
+ * with the WiringPi Library.
  *
  * The code is currently configured for a dump setup that uses shift
  * registers for address lines and Rapsberry Pi GPIO pins for input data.
- * See ParallelFLASHDumper_rpi.jpg
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <wiringPi.h>
 
-/* define according to the size of your target chip */
-#define MAX_ADDR        0xFFFFFF    /* 16 MB */
+
+/* Macros */
+
+#define BIT(n)          (1 << (n))
 
 /*
- * I/O DATA pins
+ * I/O Data pins
  *
  * On Pi 3 and 4 UART pins (15, 16) are used for bluetooth by default.
  */
-#define DQ0         8
-#define DQ1         9
-#define DQ2         7
-#define DQ3         0
-#define DQ4         1
-#define DQ5         2
-#define DQ6         3
-#define DQ7         4
+#define DQ0             8
+#define DQ1             9
+#define DQ2             7
+#define DQ3             0
+#define DQ4             1
+#define DQ5             2
+#define DQ6             3
+#define DQ7             4
 
-#define OE          5
-#define WE          12
+/* Control pins */
+#define OE              5
+#define WE              12
 
-#define ADDR_DATA   13
-#define ADDR_CLOCK  6
+/* Address pins (shift registers) */
+#define ADDR_DATA       13
+#define ADDR_CLOCK      6
+/*
+ * Address clock pulse, in micro seconds
+ *
+ * 2 us -> 500 KHz
+ * Address shift requires 25 clock pulses = 50 us
+ * With 1 extra pulse to read data from flash, the dump period/freq should be:
+ * 52 us -> 19.230 KHz
+ * Expected time to read 16 MB = 872 s = 14.5 mins
+ */
+#define ADDR_PULSE_US   2
+
+/*
+ * Define according to the size of your target chip
+ *
+ * NOTE code must be adjusted if MAX_ADDR requires more than 24 address pins.
+ */
+#define ADDR_MAX    0xFFFFFF    /* 16 MB */
+#define ADDR_BITS   24
 
 
-/* LSB is shifted out first */
-static void shiftAddrByte(unsigned char byte)
+/* Functions */
+
+static void setup_dq(int mode)
 {
-    int i;
-
-    for (i = 0; i < 8; i++) {
-        digitalWrite(ADDR_CLOCK, 0);
-        delayMicroseconds(2);
-
-        digitalWrite(ADDR_DATA, byte & 1);
-
-        digitalWrite(ADDR_CLOCK, 1);
-        delayMicroseconds(2);
-        byte >>= 1;
-    }
+    pinMode(DQ0, mode);
+    pinMode(DQ1, mode);
+    pinMode(DQ2, mode);
+    pinMode(DQ3, mode);
+    pinMode(DQ4, mode);
+    pinMode(DQ5, mode);
+    pinMode(DQ6, mode);
+    pinMode(DQ7, mode);
 }
 
-static void sendAddr(unsigned addr)
-{
-    int i;
-
-    for (i = 0; i < 3; i++) {
-        shiftAddrByte(addr & 0xFF);
-        addr >>= 8;
-    }
-
-    /* LATCH/STROBE */
-    delayMicroseconds(2);
-}
-
-static void setup(void)
+static void setup(int dq_mode)
 {
     /* Set pin modes */
-    pinMode(ADDR_DATA, OUTPUT);
-    pinMode(ADDR_CLOCK, OUTPUT);
-
-    pinMode(DQ0, INPUT);
-    pinMode(DQ1, INPUT);
-    pinMode(DQ2, INPUT);
-    pinMode(DQ3, INPUT);
-    pinMode(DQ4, INPUT);
-    pinMode(DQ5, INPUT);
-    pinMode(DQ6, INPUT);
-    pinMode(DQ7, INPUT);
-
-    pinMode(OE, OUTPUT);
-}
-
-static void input_test(void)
-{
-    printf("input_test:\n");
-}
-
-static void output_test(void)
-{
-    int v;
-
-    printf("ouput_test:\n");
-
-    pinMode(DQ0, OUTPUT);
-    pinMode(DQ1, OUTPUT);
-    pinMode(DQ2, OUTPUT);
-    pinMode(DQ3, OUTPUT);
-    pinMode(DQ4, OUTPUT);
-    pinMode(DQ5, OUTPUT);
-    pinMode(DQ6, OUTPUT);
-    pinMode(DQ7, OUTPUT);
+    setup_dq(dq_mode);
 
     pinMode(OE, OUTPUT);
     pinMode(WE, OUTPUT);
 
     pinMode(ADDR_DATA, OUTPUT);
     pinMode(ADDR_CLOCK, OUTPUT);
+}
 
-    /* repeat simple patterns */
-    for (v = 0; v < 16; v++) {
-        int a;
-        int b;
+static void set_dq(int v)
+{
+    digitalWrite(DQ0, v & BIT(0));
+    digitalWrite(DQ1, v & BIT(1));
+    digitalWrite(DQ2, v & BIT(2));
+    digitalWrite(DQ3, v & BIT(3));
+    digitalWrite(DQ4, v & BIT(4));
+    digitalWrite(DQ5, v & BIT(5));
+    digitalWrite(DQ6, v & BIT(6));
+    digitalWrite(DQ7, v & BIT(7));
+}
 
-        if (v < 8) {    /* all on/off */
-            a = b = v & 1;
-        } else {        /* bit on/bit off */
-            a = v & 1;
-            b = !a;
-        }
+/* LSB is shifted out first */
+static void set_addr(unsigned addr)
+{
+    int i;
 
-        digitalWrite(DQ0, a);
-        digitalWrite(DQ1, b);
-        digitalWrite(DQ2, a);
-        digitalWrite(DQ3, b);
+    /* NOTE an extra pulse is needed to latch the last shifted bit */
+    for (i = 0; i < ADDR_BITS + 1; i++) {
+        digitalWrite(ADDR_CLOCK, 0);
+        digitalWrite(ADDR_DATA, addr & 1);
+        delayMicroseconds(ADDR_PULSE_US / 2);
 
-        digitalWrite(DQ4, a);
-        digitalWrite(DQ5, b);
-        digitalWrite(DQ6, a);
-        digitalWrite(DQ7, b);
-
-        digitalWrite(OE, a);
-        digitalWrite(WE, b);
-        digitalWrite(ADDR_DATA, a);
-        digitalWrite(ADDR_CLOCK,b);
-        delay(500);
+        digitalWrite(ADDR_CLOCK, 1);
+        delayMicroseconds(ADDR_PULSE_US / 2);
+        addr >>= 1;
     }
 
-    /* test all values for each 4 outputs group */
-    for (v = 0; v < 16; v++) {
-        digitalWrite(DQ0, v & 1);
-        digitalWrite(DQ1, v & 2);
-        digitalWrite(DQ2, v & 4);
-        digitalWrite(DQ3, v & 8);
+    digitalWrite(ADDR_CLOCK, 0);
+}
 
-        digitalWrite(DQ4, v & 1);
-        digitalWrite(DQ5, v & 2);
-        digitalWrite(DQ6, v & 4);
-        digitalWrite(DQ7, v & 8);
-
-        digitalWrite(OE, v & 1);
-        digitalWrite(WE, v & 2);
-        digitalWrite(ADDR_DATA, v & 4);
-        digitalWrite(ADDR_CLOCK, v & 8);
-        delay(500);
-    }
-
-    digitalWrite(DQ0, 0);
-    digitalWrite(DQ1, 0);
-    digitalWrite(DQ2, 0);
-    digitalWrite(DQ3, 0);
-    digitalWrite(DQ4, 0);
-    digitalWrite(DQ5, 0);
-    digitalWrite(DQ6, 0);
-    digitalWrite(DQ7, 0);
+static void clear_outputs(void)
+{
+    set_dq(0);
 
     digitalWrite(OE, 0);
     digitalWrite(WE, 0);
 
     digitalWrite(ADDR_DATA, 0);
     digitalWrite(ADDR_CLOCK, 0);
+}
+
+static void input_test(void)
+{
+    printf("input_test:\n");
+
+    setup(INPUT);
+}
+
+static void output_test(void)
+{
+    int i, pat;
+
+    printf("ouput_test:\n");
+
+    setup(OUTPUT);
+
+    for (i = 0; i < 32; i++) {
+        /* test all values for each 4 outputs group */
+        if (i < 16)
+            pat = i | i << 4;
+        /* all on, all off */
+        else if (i < 24)
+            pat = i & 1 ? 0xff : 0;
+        /* bit on, bit off */
+        else
+            pat = i & 1 ? 0xaa : 0x55;
+
+        set_dq(pat);
+
+        digitalWrite(OE, pat & BIT(0));
+        digitalWrite(WE, pat & BIT(1));
+        digitalWrite(ADDR_DATA, pat & BIT(2));
+        digitalWrite(ADDR_CLOCK, pat & BIT(3));
+        delay(500);
+    }
+
+    clear_outputs();
 }
 
 static void dump(const char *dump_file)
@@ -181,7 +171,7 @@ static void dump(const char *dump_file)
     unsigned addr;
 
     /* TODO implement and test flash dump */
-    printf("Dumping NOR Flash from address 0 to 0x%08x...\n", MAX_ADDR);
+    printf("Dumping NOR Flash from address 0 to 0x%08x...\n", ADDR_MAX);
     printf("TODO\n");
     exit(1);
 
@@ -193,12 +183,25 @@ static void dump(const char *dump_file)
     }
 
     /* Setup pins */
-    setup();
+    setup(INPUT);
 
-    for (addr = 0; addr <= MAX_ADDR; addr++) {
-        sendAddr(addr);
+    digitalWrite(WE, 1);
+    digitalWrite(OE, 1);
+
+    digitalWrite(ADDR_DATA, 0);
+    digitalWrite(ADDR_CLOCK, 0);
+
+    delayMicroseconds(10);
+
+    /* dump */
+    for (addr = 0; addr <= ADDR_MAX; addr++) {
+        set_addr(addr);
+        /* NOTE set_addr already waits for at least 1 us */
 
         /* Read data */
+        digitalWrite(OE, 0);
+        delayMicroseconds(ADDR_PULSE_US / 2);
+
         input  = digitalRead(DQ0);
         input |= digitalRead(DQ1) << 1;
         input |= digitalRead(DQ2) << 2;
@@ -208,14 +211,18 @@ static void dump(const char *dump_file)
         input |= digitalRead(DQ6) << 6;
         input |= digitalRead(DQ7) << 7;
 
+        digitalWrite(OE, 1);
+        delayMicroseconds(ADDR_PULSE_US / 2);
+
         /* Save data */
         if (fputc(input, f) == EOF) {
             printf("error at addr 0x%x\n", addr);
             exit(1);
         }
-  }
 
-  fclose(f);
+    }
+
+    fclose(f);
 }
 
 static void usage(void)
@@ -225,6 +232,7 @@ static void usage(void)
         "flags:\n"
         "\t-i\tinput test\n"
         "\t-o\toutput test\n"
+        "\t-s\tsetup pins\n"
     );
     exit(1);
 }
@@ -248,6 +256,7 @@ int main(int argc, char const *argv[])
         switch (action) {
         case 'i':
         case 'o':
+        case 's':
             break;
 
         default:
@@ -269,6 +278,10 @@ int main(int argc, char const *argv[])
 
     case 'o':
         output_test();
+        break;
+
+    case 's':
+        setup(INPUT);
         break;
 
     default:
