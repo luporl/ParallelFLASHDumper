@@ -84,6 +84,11 @@ static void setup(void)
     pinMode(OE, OUTPUT);
 }
 
+static void input_test(void)
+{
+    printf("input_test:\n");
+}
+
 static void output_test(void)
 {
     int v;
@@ -169,59 +174,22 @@ static void output_test(void)
     digitalWrite(ADDR_CLOCK, 0);
 }
 
-static void usage(void)
+static void dump(const char *dump_file)
 {
-    printf(
-        "nordump [flags] <dump_file>\n"
-        "flags:\n"
-        "\t-o\toutput test\n"
-    );
-    exit(1);
-}
-
-int main(int argc, char const *argv[]) {
-    const char *arg, *dump_file;
     FILE *f;
     unsigned char input;
     unsigned addr;
 
-    /* Init wiringPi */
-    if (wiringPiSetup() == -1) {
-        printf("failed to initialize wiringPi\n");
-        return 1;
-    }
-
-    /* Parse args */
-    if (argc != 2)
-        usage();
-
-    arg = argv[1];
-    if (arg[0] == '-') {
-        if (arg[1] == 0 || arg[2] != 0)
-            usage();
-
-        switch (arg[1]) {
-        case 'o':
-            output_test();
-            break;
-
-        default:
-            usage();
-        }
-        return 0;
-    }
-
-    dump_file = arg;
-
     /* TODO implement and test flash dump */
+    printf("Dumping NOR Flash from address 0 to 0x%08x...\n", MAX_ADDR);
     printf("TODO\n");
-    return 1;
+    exit(1);
 
     /* Open dump file */
     f = fopen(dump_file, "wb");
     if (f == NULL) {
         printf("failed to open %s\n", dump_file);
-        return 1;
+        exit(1);
     }
 
     /* Setup pins */
@@ -243,10 +211,69 @@ int main(int argc, char const *argv[]) {
         /* Save data */
         if (fputc(input, f) == EOF) {
             printf("error at addr 0x%x\n", addr);
-            return 1;
+            exit(1);
         }
   }
 
   fclose(f);
+}
+
+static void usage(void)
+{
+    printf(
+        "nordump ([flag] | <dump_file>)\n"
+        "flags:\n"
+        "\t-i\tinput test\n"
+        "\t-o\toutput test\n"
+    );
+    exit(1);
+}
+
+int main(int argc, char const *argv[])
+{
+    char action;
+    const char *arg;
+
+    /* Parse args */
+    if (argc != 2)
+        usage();
+
+    action = 0;
+    arg = argv[1];
+    if (arg[0] == '-') {
+        if (arg[2] != 0)
+            usage();
+
+        action = arg[1];
+        switch (action) {
+        case 'i':
+        case 'o':
+            break;
+
+        default:
+            usage();
+        }
+    }
+
+    /* Init wiringPi */
+    if (wiringPiSetup() == -1) {
+        printf("failed to initialize wiringPi\n");
+        return 1;
+    }
+
+    /* Execute selected action */
+    switch (action) {
+    case 'i':
+        input_test();
+        break;
+
+    case 'o':
+        output_test();
+        break;
+
+    default:
+        dump(arg);
+    }
+
   return 0;
 }
