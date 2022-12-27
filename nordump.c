@@ -20,7 +20,9 @@
 /*
  * I/O Data pins
  *
- * On Pi 3 and 4 UART pins (15, 16) are used for bluetooth by default.
+ * NOTE1 On Pi 3 and 4 UART pins (15, 16) are used for bluetooth by default.
+ *
+ * NOTE2 Pins 8 and 9 (I2C SDA/SCL) have internal 1.8k ohm pull-up to 3v3.
  */
 #define DQ0             8
 #define DQ1             9
@@ -84,6 +86,17 @@ static void setup(int dq_mode)
     pinMode(ADDR_CLOCK, OUTPUT);
 }
 
+static void setup_all(int mode)
+{
+    setup_dq(mode);
+
+    pinMode(OE, mode);
+    pinMode(WE, mode);
+
+    pinMode(ADDR_DATA, mode);
+    pinMode(ADDR_CLOCK, mode);
+}
+
 static void set_dq(int v)
 {
     digitalWrite(DQ0, v & BIT(0));
@@ -94,6 +107,33 @@ static void set_dq(int v)
     digitalWrite(DQ5, v & BIT(5));
     digitalWrite(DQ6, v & BIT(6));
     digitalWrite(DQ7, v & BIT(7));
+}
+
+static int get_dq(void)
+{
+    int v;
+
+    v  = digitalRead(DQ0);
+    v |= digitalRead(DQ1) << 1;
+    v |= digitalRead(DQ2) << 2;
+    v |= digitalRead(DQ3) << 3;
+    v |= digitalRead(DQ4) << 4;
+    v |= digitalRead(DQ5) << 5;
+    v |= digitalRead(DQ6) << 6;
+    v |= digitalRead(DQ7) << 7;
+
+    return v;
+}
+
+static void clear_outputs(void)
+{
+    set_dq(0);
+
+    digitalWrite(OE, 0);
+    digitalWrite(WE, 0);
+
+    digitalWrite(ADDR_DATA, 0);
+    digitalWrite(ADDR_CLOCK, 0);
 }
 
 /* LSB is shifted out first */
@@ -115,22 +155,23 @@ static void set_addr(unsigned addr)
     digitalWrite(ADDR_CLOCK, 0);
 }
 
-static void clear_outputs(void)
-{
-    set_dq(0);
-
-    digitalWrite(OE, 0);
-    digitalWrite(WE, 0);
-
-    digitalWrite(ADDR_DATA, 0);
-    digitalWrite(ADDR_CLOCK, 0);
-}
-
 static void input_test(void)
 {
+    int i, v;
+
     printf("input_test:\n");
 
-    setup(INPUT);
+    setup_all(INPUT);
+
+    for (;;) {
+        v = get_dq();
+
+        for (i = 0; i < 8; i++)
+            printf("%d", v & BIT(i) ? 1 : 0);
+        printf("\t0x%02x\n", v);
+
+        delay(1000);
+    }
 }
 
 static void output_test(void)
@@ -139,7 +180,7 @@ static void output_test(void)
 
     printf("ouput_test:\n");
 
-    setup(OUTPUT);
+    setup_all(OUTPUT);
 
     for (i = 0; i < 32; i++) {
         /* test all values for each 4 outputs group */
@@ -167,7 +208,7 @@ static void output_test(void)
 static void dump(const char *dump_file)
 {
     FILE *f;
-    unsigned char input;
+    int input;
     unsigned addr;
 
     /* TODO implement and test flash dump */
@@ -202,14 +243,7 @@ static void dump(const char *dump_file)
         digitalWrite(OE, 0);
         delayMicroseconds(ADDR_PULSE_US / 2);
 
-        input  = digitalRead(DQ0);
-        input |= digitalRead(DQ1) << 1;
-        input |= digitalRead(DQ2) << 2;
-        input |= digitalRead(DQ3) << 3;
-        input |= digitalRead(DQ4) << 4;
-        input |= digitalRead(DQ5) << 5;
-        input |= digitalRead(DQ6) << 6;
-        input |= digitalRead(DQ7) << 7;
+        input = get_dq();
 
         digitalWrite(OE, 1);
         delayMicroseconds(ADDR_PULSE_US / 2);
@@ -233,6 +267,7 @@ static void usage(void)
         "\t-i\tinput test\n"
         "\t-o\toutput test\n"
         "\t-s\tsetup pins\n"
+        "\t-I\tsetup all used pins as inputs\n"
     );
     exit(1);
 }
@@ -257,6 +292,7 @@ int main(int argc, char const *argv[])
         case 'i':
         case 'o':
         case 's':
+        case 'I':
             break;
 
         default:
@@ -282,6 +318,10 @@ int main(int argc, char const *argv[])
 
     case 's':
         setup(INPUT);
+        break;
+
+    case 'I':
+        setup_all(INPUT);
         break;
 
     default:
