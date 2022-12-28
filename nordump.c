@@ -56,8 +56,24 @@
  *
  * NOTE code must be adjusted if MAX_ADDR requires more than 24 address pins.
  */
+#if 0
 #define ADDR_MAX    0xFFFFFF    /* 16 MB */
+#endif
+#define ADDR_MAX    0x000FFF    /* 4 KB */
 #define ADDR_BITS   24
+
+#define AM1         13
+#define A0          6
+#define A1          14
+#define A2          10
+#define A3          11
+#define A4          30
+#define A5          31
+#define A6          21
+#define A7          22
+#define A8          26
+#define A9          23
+#define A10         24
 
 
 /* Functions */
@@ -95,6 +111,21 @@ static void setup_all(int mode)
 
     pinMode(ADDR_DATA, mode);
     pinMode(ADDR_CLOCK, mode);
+
+    if (mode == INPUT) {
+        pinMode(AM1, mode);
+        pinMode(A0, mode);
+        pinMode(A1, mode);
+        pinMode(A2, mode);
+        pinMode(A3, mode);
+        pinMode(A4, mode);
+        pinMode(A5, mode);
+        pinMode(A6, mode);
+        pinMode(A7, mode);
+        pinMode(A8, mode);
+        pinMode(A9, mode);
+        pinMode(A10, mode);
+    }
 }
 
 static void set_dq(int v)
@@ -139,6 +170,7 @@ static void clear_outputs(void)
 /* LSB is shifted out first */
 static void set_addr(unsigned addr)
 {
+#if 0
     int i;
 
     /* NOTE an extra pulse is needed to latch the last shifted bit */
@@ -153,6 +185,22 @@ static void set_addr(unsigned addr)
     }
 
     digitalWrite(ADDR_CLOCK, 0);
+#else
+    digitalWrite(AM1, addr & BIT(0));
+    digitalWrite(A0, addr & BIT(1));
+    digitalWrite(A1, addr & BIT(2));
+    digitalWrite(A2, addr & BIT(3));
+    digitalWrite(A3, addr & BIT(4));
+    digitalWrite(A4, addr & BIT(5));
+    digitalWrite(A5, addr & BIT(6));
+    digitalWrite(A6, addr & BIT(7));
+    digitalWrite(A7, addr & BIT(8));
+    digitalWrite(A8, addr & BIT(9));
+    digitalWrite(A9, addr & BIT(10));
+    digitalWrite(A10, addr & BIT(11));
+
+    delayMicroseconds(ADDR_PULSE_US);
+#endif
 }
 
 static void input_test(void)
@@ -264,16 +312,24 @@ static void io_test(void)
     }
 }
 
+static void get_ids(void)
+{
+    printf("get_ids:\n");
+
+    setup_all(INPUT);
+
+    /* Done, setup all pins as inputs, for safety */
+    setup_all(INPUT);
+}
+
 static void dump(const char *dump_file)
 {
     FILE *f;
-    int input;
+    int input, mode;
     unsigned addr;
 
     /* TODO implement and test flash dump */
     printf("Dumping NOR Flash from address 0 to 0x%08x...\n", ADDR_MAX);
-    printf("TODO\n");
-    exit(1);
 
     /* Open dump file */
     f = fopen(dump_file, "wb");
@@ -283,15 +339,51 @@ static void dump(const char *dump_file)
     }
 
     /* Setup pins */
-    setup(INPUT);
+    /* setup(INPUT); */
+    setup_all(INPUT);
 
+    /* mode = INPUT; */
+    mode = OUTPUT;
+    pinMode(AM1, mode);
+    pinMode(A0, mode);
+    pinMode(A1, mode);
+    pinMode(A2, mode);
+    pinMode(A3, mode);
+    pinMode(A4, mode);
+    pinMode(A5, mode);
+    pinMode(A6, mode);
+    pinMode(A7, mode);
+    pinMode(A8, mode);
+    pinMode(A9, mode);
+    pinMode(A10, mode);
+
+    pinMode(WE, OUTPUT);
     digitalWrite(WE, 1);
-    digitalWrite(OE, 1);
+    delayMicroseconds(10);
 
+    pinMode(OE, OUTPUT);
+    digitalWrite(OE, 1);
+    delayMicroseconds(10);
+
+#if 0
+    /* OE test */
+    digitalWrite(OE, 0);
+    delay(500);
+    digitalWrite(OE, 1);
+    delay(500);
+#endif
+
+    /*
     digitalWrite(ADDR_DATA, 0);
     digitalWrite(ADDR_CLOCK, 0);
+    */
 
     delayMicroseconds(10);
+
+    /*
+    printf("TODO\n");
+    exit(1);
+    */
 
     /* dump */
     for (addr = 0; addr <= ADDR_MAX; addr++) {
@@ -323,6 +415,7 @@ static void usage(void)
     printf(
         "nordump ([flag] | <dump_file>)\n"
         "flags:\n"
+        "\t-d\tget manufacturer and device ids\n"
         "\t-i\tinput test\n"
         "\t-o\toutput test\n"
         "\t-s\tsetup pins\n"
@@ -349,6 +442,7 @@ int main(int argc, char const *argv[])
 
         action = arg[1];
         switch (action) {
+        case 'd':
         case 'i':
         case 'o':
         case 's':
@@ -369,6 +463,10 @@ int main(int argc, char const *argv[])
 
     /* Execute selected action */
     switch (action) {
+    case 'd':
+        get_ids();
+        break;
+
     case 'i':
         input_test();
         break;
