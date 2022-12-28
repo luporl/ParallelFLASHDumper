@@ -205,6 +205,65 @@ static void output_test(void)
     clear_outputs();
 }
 
+static void io_test(void)
+{
+    int i, pat, state, v;
+
+    printf("io_test:\n");
+
+    /* Output test */
+    setup_all(OUTPUT);
+
+    for (i = 0; i < 16; i++) {
+        /* all on, all off */
+        if (i < 8)
+            pat = i & 1 ? 0xff : 0;
+        /* bit on, bit off */
+        else
+            pat = i & 1 ? 0xaa : 0x55;
+
+        set_dq(pat);
+        delay(500);
+    }
+
+    clear_outputs();
+
+    /* Input test */
+    delay(500);
+    setup_all(INPUT);
+    delay(500);
+
+    state = 0;
+    while (state < 3) {
+        v = get_dq();
+
+        for (i = 0; i < 8; i++)
+            printf("%d", v & BIT(i) ? 1 : 0);
+        printf("\t0x%02x\n", v);
+
+        if (state == 0 && (v & 0xf) == 0x0)
+            state++;
+        if (state == 1 && (v & 0xf) == 0x5)
+            state++;
+        if (state == 2 && (v & 0xf) == 0xa)
+            state++;
+
+        delay(1000);
+    }
+
+    /* Final output */
+    delay(500);
+    setup_all(OUTPUT);
+    delay(500);
+
+    for (i = 0; i < 2; i++) {
+        set_dq(0xff);
+        delay(500);
+        set_dq(0x00);
+        delay(500);
+    }
+}
+
 static void dump(const char *dump_file)
 {
     FILE *f;
@@ -267,6 +326,7 @@ static void usage(void)
         "\t-i\tinput test\n"
         "\t-o\toutput test\n"
         "\t-s\tsetup pins\n"
+        "\t-y\tinput/output test\n"
         "\t-I\tsetup all used pins as inputs\n"
     );
     exit(1);
@@ -292,6 +352,7 @@ int main(int argc, char const *argv[])
         case 'i':
         case 'o':
         case 's':
+        case 'y':
         case 'I':
             break;
 
@@ -318,6 +379,10 @@ int main(int argc, char const *argv[])
 
     case 's':
         setup(INPUT);
+        break;
+
+    case 'y':
+        io_test();
         break;
 
     case 'I':
