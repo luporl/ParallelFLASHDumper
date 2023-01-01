@@ -15,14 +15,17 @@
 
 /* Macros */
 
+/* Enable test commands */
+#define TEST
+
 #define BIT(n)          (1 << (n))
 
 /*
  * I/O Data pins
  *
  * NOTE1 On Pi 3 and 4 UART pins (15, 16) are used for bluetooth by default.
- *
  * NOTE2 Pins 8 and 9 (I2C SDA/SCL) have internal 1.8k ohm pull-up to 3v3.
+ * NOTE3 Pins 30 and 31 are reserved for EEPROM I2C.
  */
 #define DQ0             8
 #define DQ1             9
@@ -67,13 +70,15 @@
 #define A1          14
 #define A2          10
 #define A3          11
-#define A4          30
-#define A5          31
-#define A6          21
-#define A7          22
-#define A8          26
-#define A9          23
-#define A10         24
+#define A4          21
+#define A5          22
+#define A6          26
+#define A7          23
+#define A8          24
+#define A9          27
+#define A10         25
+#define A11         28
+#define A12         29
 
 
 /* Functions */
