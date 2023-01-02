@@ -279,7 +279,7 @@ static void addr_shift(unsigned *addr, unsigned bit)
 
     digitalWrite(ADDR_CLOCK, 1);
     delayMicroseconds(ADDR_PULSE_US / 2);
-    *addr >>= 1;
+    *addr <<= 1;
 
     digitalWrite(ADDR_CLOCK, 0);
 }
@@ -330,7 +330,7 @@ void addr_test(void)
     }
 
     /* Bit shift test */
-    addr = 0x808080;
+    addr = 0x010101;
     set_addr(addr);
     for (i = 0; i < 8; i++) {
         printf("0x%06x\n", addr);

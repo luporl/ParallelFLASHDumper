@@ -77,7 +77,7 @@ void setup(void)
     delayMicroseconds(10);
 }
 
-/* LSB is shifted out first */
+/* MSB is shifted out first */
 void set_addr(unsigned addr)
 {
     int i;
@@ -85,12 +85,12 @@ void set_addr(unsigned addr)
     /* NOTE an extra pulse is needed to latch the last shifted bit */
     for (i = 0; i < ADDR_BITS + 1; i++) {
         digitalWrite(ADDR_CLOCK, 0);
-        digitalWrite(ADDR_DATA, addr & 1);
+        digitalWrite(ADDR_DATA, addr & BIT(ADDR_BITS - 1));
         delayMicroseconds(ADDR_PULSE_US / 2);
 
         digitalWrite(ADDR_CLOCK, 1);
         delayMicroseconds(ADDR_PULSE_US / 2);
-        addr >>= 1;
+        addr <<= 1;
     }
 
     digitalWrite(ADDR_CLOCK, 0);
