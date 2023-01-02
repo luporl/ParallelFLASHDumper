@@ -15,6 +15,10 @@
 #include <wiringPi.h>
 
 
+/* Delay time to use in nor read/write functions */
+#define NRW_DELAY_US    100
+
+
 /* Functions */
 
 static int dq(int n)
@@ -73,28 +77,6 @@ void setup(void)
     delayMicroseconds(10);
 }
 
-#endif
-
-void set_dq(int v)
-{
-    int i;
-
-    for (i = 0; i < DQN; i++)
-        digitalWrite(dq(i), v & BIT(i));
-}
-
-int get_dq(void)
-{
-    int i, v;
-
-    v = 0;
-    for (i = 0; i < DQN; i++)
-        v  |= digitalRead(dq(i)) << i;
-    return v;
-}
-
-#if !TEST_ADDR_PINS
-
 /* LSB is shifted out first */
 void set_addr(unsigned addr)
 {
@@ -116,15 +98,91 @@ void set_addr(unsigned addr)
 
 #endif
 
+void set_dq(int v)
+{
+    int i;
+
+    for (i = 0; i < DQN; i++)
+        digitalWrite(dq(i), v & BIT(i));
+}
+
+int get_dq(void)
+{
+    int i, v;
+
+    v = 0;
+    for (i = 0; i < DQN; i++)
+        v  |= digitalRead(dq(i)) << i;
+    return v;
+}
+
+static unsigned nor_read(unsigned addr)
+{
+    unsigned v;
+
+    setup_dq(INPUT);
+
+    /* Disable DQ output */
+    digitalWrite(WE, 1);
+    digitalWrite(OE, 1);
+    delayMicroseconds(NRW_DELAY_US);
+
+    /* Set addr */
+    set_addr(addr);
+    delayMicroseconds(NRW_DELAY_US);
+
+    /* Perform read */
+    digitalWrite(OE, 0);
+    delayMicroseconds(NRW_DELAY_US);
+    v = get_dq();
+    digitalWrite(OE, 1);
+    delayMicroseconds(NRW_DELAY_US);
+
+    return v;
+}
+
+static void nor_write(unsigned addr, unsigned data)
+{
+    /* Disable DQ output */
+    digitalWrite(WE, 1);
+    digitalWrite(OE, 1);
+    delayMicroseconds(NRW_DELAY_US);
+
+    /* Set addr/data */
+    setup_dq(OUTPUT);
+    set_addr(addr);
+    set_dq(data);
+    delayMicroseconds(NRW_DELAY_US);
+
+    /* Perform write */
+    digitalWrite(WE, 0);                /* latch addr */
+    delayMicroseconds(NRW_DELAY_US);
+    digitalWrite(WE, 1);                /* latch data */
+    delayMicroseconds(NRW_DELAY_US);
+}
+
 static void get_ids(void)
 {
     printf("get_ids:\n");
 
-    setup_all(INPUT);
+    setup();
 
-    /* TODO Get manufacturer id */
+    /* Enter Autoselect mode */
+    nor_write(0xaaa, 0xaa);
+    nor_write(0x555, 0x55);
+    nor_write(0xaaa, 0x90);
 
-    /* TODO Get device id */
+    /* Get manufacturer id */
+    printf("Manufacturer ID: 0x%02x\n", nor_read(0x00));
+
+    /* Get device id */
+    printf("Device ID:");
+    printf(" 0x%02x", nor_read(0x02));
+    printf(" 0x%02x", nor_read(0x1c));
+    printf(" 0x%02x\n", nor_read(0x1e));
+
+    /* Reset to read mode */
+    nor_write(0x00, 0xf0);
 
     /* Done, setup all pins as inputs, for safety */
     setup_all(INPUT);
