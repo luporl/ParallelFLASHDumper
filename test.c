@@ -60,8 +60,16 @@ void setup(void)
 
     setup_all(INPUT);
 
+    pinMode(WE, OUTPUT);
+    digitalWrite(WE, 1);
+    pinMode(OE, OUTPUT);
+    digitalWrite(OE, 1);
+
     for (i = -1; i < AN; i++)
         pinMode(a(i), OUTPUT);
+
+    /* Wait for stabilization of signals */
+    delayMicroseconds(10);
 }
 
 void set_addr(unsigned addr)
@@ -251,3 +259,96 @@ void oe_test(void)
     digitalWrite(OE, 1);
     delay(500);
 }
+
+#if !TEST_ADDR_PINS
+
+static void addr_test_check(unsigned i, unsigned exp, unsigned got)
+{
+    if (got != exp) {
+        printf("Test #%02d failed: expected 0x%02x, got 0x%02x\n",
+            i, exp, got);
+        exit(1);
+    }
+}
+
+static void addr_shift(unsigned *addr, unsigned bit)
+{
+    digitalWrite(ADDR_CLOCK, 0);
+    digitalWrite(ADDR_DATA, bit);
+    delayMicroseconds(ADDR_PULSE_US / 2);
+
+    digitalWrite(ADDR_CLOCK, 1);
+    delayMicroseconds(ADDR_PULSE_US / 2);
+    *addr >>= 1;
+
+    digitalWrite(ADDR_CLOCK, 0);
+}
+
+/*
+ * Address shift registers test.
+ *
+ * To test one address shift register, connect its 8 output pins to DQ0-DQ7.
+ */
+void addr_test(void)
+{
+    unsigned addr, i, pat, v;
+    static unsigned tvals[8] = {
+        0x0f0f0f,
+        0x111111,
+        0x121212,
+        0x747474,
+        0x898989,
+        0xa5a5a5,
+        0xc3c3c3,
+        0xf1f1f1
+    };
+
+    printf("addr_test\n");
+
+    setup();
+
+    /* Patterns test */
+    for (i = 0; i < 32; i++) {
+        /* test all values for each 4 outputs group */
+        if (i < 16)
+            pat = i | i << 4;
+        /* all on, all off */
+        else if (i < 24)
+            pat = i & 1 ? 0xff : 0;
+        /* bit on, bit off */
+        else
+            pat = i & 1 ? 0xaa : 0x55;
+
+        addr = pat | pat << 8 | pat << 16;
+
+        printf("0x%06x\n", addr);
+        set_addr(addr);
+        delayMicroseconds(ADDR_PULSE_US / 2);
+
+        v = get_dq();
+        addr_test_check(i, pat, v);
+    }
+
+    /* Bit shift test */
+    addr = 0x808080;
+    set_addr(addr);
+    for (i = 0; i < 8; i++) {
+        printf("0x%06x\n", addr);
+        delayMicroseconds(ADDR_PULSE_US / 2);
+        v = get_dq();
+        addr_test_check(i, addr & 0xff, v);
+        addr_shift(&addr, 0);
+    }
+
+    /* Random values */
+    for (i = 0; i < 8; i++) {
+        addr = tvals[i];
+        printf("0x%06x\n", addr);
+        set_addr(addr);
+        delayMicroseconds(ADDR_PULSE_US / 2);
+        v = get_dq();
+        addr_test_check(i, addr & 0xff, v);
+    }
+}
+
+#endif

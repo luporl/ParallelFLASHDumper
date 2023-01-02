@@ -68,6 +68,9 @@ void setup(void)
     digitalWrite(ADDR_DATA, 0);
     pinMode(ADDR_CLOCK, OUTPUT);
     digitalWrite(ADDR_CLOCK, 0);
+
+    /* Wait for stabilization of signals */
+    delayMicroseconds(10);
 }
 
 #endif
@@ -144,8 +147,6 @@ static void dump(const char *dump_file)
 
     /* Setup pins */
     setup();
-    /* Wait for stabilization of signals */
-    delayMicroseconds(10);
 
     /* dump */
     for (addr = 0; addr <= ADDR_MAX; addr++) {
@@ -177,13 +178,16 @@ static void usage(void)
         "nordump ([flag] | <dump_file>)\n"
         "flags:\n"
         "\t-d\tget manufacturer and device ids\n"
+        "\t-I\tsetup all used pins as inputs\n"
 #if TEST
+#if !TEST_ADDR_PINS
+        "\t-a\taddress test\n"
+#endif
         "\t-e\tOE# test\n"
         "\t-i\tinput test\n"
         "\t-o\toutput test\n"
         "\t-y\tinput/output test\n"
 #endif
-        "\t-I\tsetup all used pins as inputs\n"
     );
     exit(1);
 }
@@ -207,6 +211,9 @@ int main(int argc, char const *argv[])
         switch (action) {
         case 'd':
 #if TEST
+#if !TEST_ADDR_PINS
+        case 'a':
+#endif
         case 'e':
         case 'i':
         case 'o':
@@ -233,6 +240,12 @@ int main(int argc, char const *argv[])
         break;
 
 #if TEST
+#if !TEST_ADDR_PINS
+    case 'a':
+        addr_test();
+        break;
+#endif
+
     case 'e':
         oe_test();
         break;
