@@ -260,6 +260,34 @@ void oe_test(void)
     delay(500);
 }
 
+void read_test(void)
+{
+    int i, j;
+    unsigned v;
+
+    printf("read_test\n");
+
+    setup();
+
+    for (i = 0; i < 8; i++) {
+        for (j = 0; j < 16; j++) {
+            set_addr(0xf0 + j);
+
+            /* Read data */
+            digitalWrite(OE, 0);
+            delayMicroseconds(ADDR_PULSE_US / 2);
+
+            v = get_dq();
+
+            digitalWrite(OE, 1);
+            delayMicroseconds(ADDR_PULSE_US / 2);
+
+            printf(" %02x", v);
+        }
+        printf("\n");
+    }
+}
+
 #if !TEST_ADDR_PINS
 
 static void addr_test_check(unsigned i, unsigned exp, unsigned got)

@@ -167,6 +167,9 @@ static void get_ids(void)
 
     setup();
 
+    /* Reset */
+    nor_write(0x00, 0xf0);
+
     /* Enter Autoselect mode */
     nor_write(0xaaa, 0xaa);
     nor_write(0x555, 0x55);
@@ -244,6 +247,7 @@ static void usage(void)
         "\t-e\tOE# test\n"
         "\t-i\tinput test\n"
         "\t-o\toutput test\n"
+        "\t-r\tread test\n"
         "\t-y\tinput/output test\n"
 #endif
     );
@@ -275,6 +279,7 @@ int main(int argc, char const *argv[])
         case 'e':
         case 'i':
         case 'o':
+        case 'r':
         case 'y':
 #endif
         case 'I':
@@ -314,6 +319,10 @@ int main(int argc, char const *argv[])
 
     case 'o':
         output_test();
+        break;
+
+    case 'r':
+        read_test();
         break;
 
     case 'y':
